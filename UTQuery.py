@@ -4,6 +4,8 @@ import socket
 import struct
 import time
 
+VERSION = "1.1"
+
 class UTPlayer(object):
     """storage class with name cleanup"""
     def __init__(self):
@@ -80,12 +82,16 @@ class UTServer(object):
         if type(query) != str:
             query = self.query(qtype, pkl=qpkl)
         ql = map(lambda q:q[1:], query[5:].split('\x00'))
+        dd = dict() #duplicate key counts
         qd = dict()
         mut_count = 0
         for i in xrange(0, len(ql)-1, 2):
-            if ql[i].lower() == 'mutator':
-                ql[i] += str(mut_count)
-                mut_count += 1
+            if ql[i].lower() in map(lambda q:q.lower(), qd.keys()):
+                k = ql[i].lower()
+                if k not in dd.keys():
+                    dd[k] = 0
+                dd[k] += 1
+                ql[i] += str(dd[k])
             qd[ql[i]] = ql[i+1]
         return qd
 
