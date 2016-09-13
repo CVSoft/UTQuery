@@ -1,10 +1,9 @@
 import re
-from select import select
 import socket
 import struct
 import time
 
-VERSION = "1.1"
+VERSION = "1.15"
 
 class UTPlayer(object):
     """storage class with name cleanup"""
@@ -44,7 +43,8 @@ class UTPlayer(object):
             self.score = int(self.score-2**32)
 
 class UTServer(object):
-    def __init__(self, addr, port=7778, timeout=0.4):
+    def __init__(self, addr, port=7778, timeout=None):
+        if type(timeout) == type(None): timeout = 0.4 #python pls
         self.timeout = timeout
         self.addr = addr
         self.port = port
@@ -130,12 +130,13 @@ class UTServer(object):
                 "Flags":a[8],
                 "Skill":a[9]}
 
-    def parse_players(self, query=None):
+    def parse_players(self, query=None, rem_fakes=True):
         if type(query) != str:
             query = self.query(2)
         #oh god
-        i = 5 #skip the header
+        i = 5 #skip the header [edit: uhh]
         pl = []
+        if len(query) == 0: return [] #no players online == no data recv'd?
         while True:
             p = UTPlayer()
             p.pid = struct.unpack("=I", query[i:i+4])[0]
@@ -168,8 +169,8 @@ class UTServer(object):
                 print "Score        : %s" % repr(query[i-8:i-4])
                 print "StatsID      : %s" % repr(query[i-4:i])
         i = 0
-        while i < len(pl):
-            if pl[i].name in ["Red Team", "Blue Team"] and pl[i].ping == 0:
+        while i < len(pl) and rem_fakes:
+            if "team" in pl[i].name.lower() and pl[i].ping == 0:
                 pl.pop(i)
             else: i += 1
         return pl

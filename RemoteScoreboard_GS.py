@@ -4,19 +4,21 @@ import sys
 import time
 from traceback import format_tb
 
-import UTQuery
+import GSQuery
+
+## proof of how easy it is to modify GSQuery to replace UTQuery
 
 class Server(object):
-    def __init__(self, addr, port=7778, team_override = False, width=80,
+    def __init__(self, addr, port=7787, team_override = False, width=80,
                  timeout=None):
-        self.server = UTQuery.UTServer(addr, port, timeout=timeout)
+        self.server = GSQuery.GSServer(addr, port, timeout=timeout)
         self.set_strings(width)
         self.hide_virtual = False
         self.name = None
         self.game_type = None
         self.map = None
         self.team_server = None
-        #for 3SPN-hl which doesn't poll properly
+        #for 3SPN-hl which doesn't poll properly (GameSpy query polls correctly)
         self.team_override = team_override
 
     def set_strings(self, width=80):
@@ -33,10 +35,10 @@ class Server(object):
         b = (self.name, self.game_type, self.map, self.team_server)
         try:
             si = self.server.parse_query() #basic query
-            self.name = si["Server Name"]
-            self.game_type = si["Game Type"]
-            self.map = si["Map Name"]
-            self.team_server = (si["Game Type"] not in ["xDeathMatch"]) \
+            self.name = si["hostname"]
+            self.game_type = si["gametype"]
+            self.map = si["mapname"]
+            self.team_server = (si["gametype"] not in ["xDeathMatch"]) \
                                or self.team_override
         except:
             #don't update if failure
@@ -45,14 +47,9 @@ class Server(object):
     def get_all_players(self, force_update=True):
         if force_update: self.get_server_info()
         fstr = '{:<%d}  {:>3d} {:>4d} ms' % (self.tcw - 13)
-        try:
-            if float(UTQuery.VERSION) > 1.14:
-                pl = self.server.parse_players(rem_fakes=False)
-            else: pl = self.server.parse_players()
-        except ValueError:
-            pl = self.server.parse_players()
+        pl = self.server.parse_players()
         if len(pl) == 0:
-            return tuple() #if no players, server returns no data
+            return tuple() #if no players, server returns no data (UTQuery only)
         o = []
         for p in pl: o.append((p, fstr.format(p.name, p.score, p.ping)))
         return o
@@ -70,28 +67,9 @@ class Server(object):
         return self.get_players_dm(show, nl)
 
     def get_players_dm(self, show=False, nl=False):
-        pl = self.get_all_players()
-        #no rts/bts, no teams, but we need to filter fakes
-        fl = []
-        for p in pl:
-            if p[0].ping == 0 and (' ' in p[0].name or len(p[0].name) == 0):
-                fl.append(pl.index(p))
-        if self.hide_virtual:
-            for i in sorted(list(set(fl)), reverse=True): pl.pop(i)
-        #sort 0-score players into spec (BAD! but I don't care)
-        pt, spec = ([], []) #pt = playing team
-        for p in pl:
-            if p[0].score == 0: spec.append(p)
-            else: pt.append(p)
+        pt = self.get_all_players()
         #sort
         pt = sort_by_score(pt)
-        spec = sort_by_ping(spec)
-        #equalize lengths of lists
-        while len(pt) != len(spec):
-            if len(pt) > len(spec):
-                spec.append((None, ' '*self.tcw))
-            elif len(spec) > len(pt):
-                pt.append((None, ' '*self.tcw))
         #title bar
         o = [self.thick_bar]
         if type(self.name) == str:
@@ -100,11 +78,11 @@ class Server(object):
                 o.append(self.ftext.format("Playing %s on %s" % (self.game_type,
                                                                  self.map)))
             o.append(self.split_bar)
-        o.append(self.stext.format("Players", "Spectators"))
+        o.append(self.ftext.format("Players"))
         if len(pl) > 0: o.append(self.split_bar)
         #players
-        for i in xrange(min(len(pt), len(spec))):
-            o.append(self.stext.format(pt[i][1], spec[i][1]))
+        for p in pt:
+            o.append(self.ftext.format(p[1]))
         #footer
         o.append(self.thin_bar)
         if nl:
@@ -115,28 +93,10 @@ class Server(object):
 
     def get_players_team(self, show=False, nl=False):
         pl = self.get_all_players()
-        #find team score totals
-        rts, bts = (None, None)
-        fl = [] #indices of non-player spectators
-        for p in pl:
-            if p[0].ping == 0 and (' ' in p[0].name or len(p[0].name) == 0):
-                if self.hide_virtual: fl.append(pl.index(p))
-                if "red" in p[0].name.lower():
-                    rts = p[0].score
-                    if not self.hide_virtual: fl.append(pl.index(p)) #no dupes
-                elif "blue" in p[0].name.lower():
-                    bts = p[0].score
-                    if not self.hide_virtual: fl.append(pl.index(p))
-        for i in sorted(list(set(fl)), reverse=True): pl.pop(i)
-        if type(rts) != type(None): rts = "Red Team - %d" % rts
-        else: rts = "Red Team"
-        if type(bts) != type(None): bts = "Blue Team - %d" % bts
-        else: bts = "Blue Team"
-        rt, bt, spec = ([], [], [])
+        rt, bt= ([], [])
         #sort player tuples into teams
-        for p in pl: [spec, rt, bt][p[0].team].append(p)
+        for p in pl: [rt, bt][p[0].team].append(p)
         rt, bt = map(sort_by_score, [rt, bt])
-        spec = sort_by_ping(spec)
         #there is certainly a better way for the following
         while len(rt) != len(bt):
             if len(rt) > len(bt):
@@ -151,19 +111,12 @@ class Server(object):
                 o.append(self.ftext.format("Playing %s on %s" % (self.game_type,
                                                                  self.map)))
             o.append(self.split_bar)
-        o.append(self.stext.format(rts, bts))
+        o.append(self.stext.format("Red Team", "Blue Team"))
         if len(pl) > 0: o.append(self.split_bar)
         #team player list
         for i in xrange(min(len(rt), len(bt))):
             o.append(self.stext.format(rt[i][1], bt[i][1]))
 ##      o.append(fstr.format(' ', ' '))
-        #spec separator
-        if len(spec) > 0:
-            o.append(self.thin_bar)
-            #spec list
-            o.append(self.ftext.format('Spectators'))
-            for i in xrange(len(spec)):
-                o.append(self.ftext.format(spec[i][1]))
         #footer
         o.append(self.thin_bar)
         if nl:
