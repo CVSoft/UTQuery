@@ -15,8 +15,12 @@ UTQuery using GameSpy query. Spectators and team scores are not visible, but cor
 
 ## RemoteScoreboard
 This is an example program, written for both UTQuery and GSQuery, that displays the scores and pings of all connected players. It isn't the most efficient, but it is a good working proof of concept. 
+
 Command line syntax: python remotescoreboard.py server-ip [port [override-xDeathMatch]]
+
 override-xDeathMatch forces RemoteScoreboard to assume there is a team match. This is because 3SPN v3.223hl identifies in UTQuery (but not GSQuery) as xDeathMatch instead of TeamArenaMaster/Freon, allowing the server to appear in the UT2004 Master Server Browser without the user having to install 3SPN on their client, but this has the side-effect of confusing UTQuery. 
+
+![http://i.imgur.com/nHnpL2y.png](http://i.imgur.com/nHnpL2y.png)
 
 ## A Note
 I have tried to make this cross-platform, but I have only tested this on Windows with an 80-character-wide command prompt. UTQuery/GSQuery should work without problems cross-platform (except for systems with different endianness because of the way I use struct.unpack()), but I make no guarantees that RemoteScoreboard will display properly on other platforms. 
